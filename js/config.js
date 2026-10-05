@@ -1,6 +1,6 @@
 const CONFIG = {
 
-  API_URL: 'https://script.google.com/macros/s/AKfycbyQeCIYbpcp8LN5EvGoduI3EYLGley7i0ohNpl0H-pdo3mGcV_85yCTrDB1Et0sXazA/exec',
+  API_URL: 'https://script.google.com/macros/s/AKfycbwfSS4Y6zXbaUQ92bOwW7Y601VHJhBpC-kK-axW7QAcRzTeBpTmxJl167qBHx8EeNi2/exec',
 
   APP_NAME: 'WMS System',
 
