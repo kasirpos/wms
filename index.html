@@ -5,15 +5,89 @@
 <div id="toast" class="toast"></div>
 <script src="js/config.js"></script><script src="js/api.js"></script><script src="js/auth.js"></script>
 <script>
-const NAV=[['MAIN',[['dashboard','⌂','Dashboard']]],['MASTER DATA',[['master-part','▦','Master Part'],['warehouse','▣','Warehouse'],['customer','◉','Customer'],['bom','⌬','BOM']]],['INBOUND & WAREHOUSE',[['receiving','↓','Receiving'],['stock','▤','Stock'],['transfer','⇄','Transfer'],['issue','→','Issue Material']]],['PRODUCTION & QUALITY',[['production','⚙','Production'],['testing','✓','Testing / QC'],['material-ng','!','Material NG'],['hold','⏸','Product Hold']]],['SHIPPING',[['delivery','□','FG Delivery']]],['CONTROL & REPORT',[['stock-opname','⊙','Stock Opname'],['transactions','≡','Transactions']]]];
+/* ========== NAV ICONS (SVG) ========== */
+const NAV_ICONS={
+  home:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>',
+  layers:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
+  inbound:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><line x1="10" y1="12" x2="14" y2="12"/></svg>',
+  factory:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h20"/><path d="M4 20V10l6 4V10l6 4V6l6 4v10"/></svg>',
+  truck:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="1"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>',
+  chart:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
+  chevron:'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>'
+};
+
+const NAV=[
+  ['MAIN','home',[['dashboard','⌂','Dashboard']]],
+  ['MASTER DATA','layers',[['master-part','▦','Master Part'],['warehouse','▣','Warehouse'],['customer','◉','Customer'],['bom','⌬','BOM']]],
+  ['INBOUND & WAREHOUSE','inbound',[['receiving','↓','Receiving'],['stock','▤','Stock'],['transfer','⇄','Transfer'],['issue','→','Issue Material']]],
+  ['PRODUCTION & QUALITY','factory',[['production','⚙','Production'],['testing','✓','Testing / QC'],['material-ng','!','Material NG'],['hold','⏸','Product Hold']]],
+  ['SHIPPING','truck',[['delivery','□','FG Delivery']]],
+  ['CONTROL & REPORT','chart',[['stock-opname','⊙','Stock Opname'],['transactions','≡','Transactions']]]
+];
+
 const META={dashboard:['Dashboard','Inventory Control & Warehouse Overview'], 'master-part':['Master Part','MasterPart'],warehouse:['Warehouse','Warehouse & Location'],customer:['Customer','Customer Master'],bom:['BOM','Bill of Material'],receiving:['Receiving','Supplier → STG'],stock:['Stock','InventoryBalance'],transfer:['Transfer','Warehouse Movement'],issue:['Issue Material','Warehouse → PROD'],production:['Production','Sub Assembly & Finish Product'],testing:['Testing / QC','PASS → FG | NG → HOLD'],'material-ng':['Material NG','PROD → MAT-NG'],hold:['Product Hold','TEST → HOLD'],delivery:['FG Delivery','FG → Customer'],'stock-opname':['Stock Opname','Physical Stock Validation'],transactions:['Transactions','Traceability']};
 let CACHE={parts:[],warehouses:[],customers:[],stock:[]};
 function esc(x){return String(x??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));} function fmt(x){return Number(x||0).toLocaleString('id-ID');}
 function toast(msg,ok=true){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(ok?'ok':'err')+' show';setTimeout(()=>t.className='toast',3000)}
 function user(){try{return JSON.parse(sessionStorage.getItem('wmsUser')||'{}')}catch{return {}}}
-function buildNav(){document.getElementById('nav').innerHTML=NAV.map(([sec,items])=>`<div class="nav-sec">${sec}</div>${items.map(x=>`<button class="nav-item" data-page="${x[0]}"><i>${x[1]}</i>${x[2]}</button>`).join('')}`).join('');document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>go(b.dataset.page));}
+
+/* ========== BUILD NAV (DROPDOWN) ========== */
+function buildNav(){
+  const nav=document.getElementById('nav');
+  const currentPage=(document.querySelector('.nav-item.active')?.dataset.page)||'dashboard';
+  nav.innerHTML=NAV.map(([label,icon,items])=>{
+    const hasActive=items.some(x=>x[0]===currentPage);
+
+    // Single item → render sebagai direct button (tanpa chevron)
+    if(items.length===1){
+      const x=items[0];
+      return `<button class="nav-item solo ${x[0]===currentPage?'active':''}" data-page="${x[0]}">
+        <span class="nav-solo-icon">${NAV_ICONS[icon]||''}</span>
+        <span>${x[2]}</span>
+      </button>`;
+    }
+
+    // Multi item → render sebagai dropdown
+    return `<div class="nav-group ${hasActive?'open':''}">
+      <button class="nav-group-head" type="button" onclick="toggleNavGroup(this)">
+        <span class="nav-group-icon">${NAV_ICONS[icon]||''}</span>
+        <span class="nav-group-label">${label}</span>
+        <span class="nav-chevron">${NAV_ICONS.chevron}</span>
+      </button>
+      <div class="nav-group-body">
+        ${items.map(x=>`<button class="nav-item ${x[0]===currentPage?'active':''}" data-page="${x[0]}">
+          <i>${x[1]}</i>${x[2]}
+        </button>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+  document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>go(b.dataset.page));
+}
+
+function toggleNavGroup(btn){
+  const group=btn.closest('.nav-group');
+  if(group) group.classList.toggle('open');
+}
+
 async function loadCache(){const jobs=[['parts','parts'],['warehouses','warehouses'],['customers','customers'],['stock','stock']];const results=await Promise.all(jobs.map(async([k,a])=>{try{return [k,await apiGet(a)]}catch(e){return [k,{success:false,error:e}]}}));results.forEach(([k,r])=>{if(r.success)CACHE[k]=r.data||[]});}
-function go(page){const m=META[page]||META.dashboard;document.getElementById('pageTitle').textContent=m[0];document.getElementById('pageSub').textContent=m[1];document.querySelectorAll('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.page===page));document.getElementById('nav').classList.remove('open');if(page==='dashboard')dashboard();else if(page==='scan')scanPage();else if(page==='stock')stockPage();else if(page==='transactions')txPage();else if(page==='receiving')receivingPage();else if(page==='transfer')transferPage();else if(page==='issue')issuePage();else if(page==='production')productionPage();else if(page==='testing')testingPage();else if(page==='material-ng')materialNGPage();else if(page==='hold')holdPage();else if(page==='delivery')deliveryPage();else if(page==='stock-opname')opnamePage();else if(page==='master-part')masterPartPage();else if(page==='warehouse')warehousePage();else if(page==='customer')customerPage();else if(page==='bom')bomPage();}
+
+/* ========== GO PAGE (auto-open parent group) ========== */
+function go(page){
+  const m=META[page]||META.dashboard;
+  document.getElementById('pageTitle').textContent=m[0];
+  document.getElementById('pageSub').textContent=m[1];
+  document.querySelectorAll('.nav-item').forEach(x=>{
+    const isActive=x.dataset.page===page;
+    x.classList.toggle('active',isActive);
+    if(isActive){
+      const group=x.closest('.nav-group');
+      if(group) group.classList.add('open');
+    }
+  });
+  document.getElementById('nav').classList.remove('open');
+  if(page==='dashboard')dashboard();else if(page==='scan')scanPage();else if(page==='stock')stockPage();else if(page==='transactions')txPage();else if(page==='receiving')receivingPage();else if(page==='transfer')transferPage();else if(page==='issue')issuePage();else if(page==='production')productionPage();else if(page==='testing')testingPage();else if(page==='material-ng')materialNGPage();else if(page==='hold')holdPage();else if(page==='delivery')deliveryPage();else if(page==='stock-opname')opnamePage();else if(page==='master-part')masterPartPage();else if(page==='warehouse')warehousePage();else if(page==='customer')customerPage();else if(page==='bom')bomPage();
+}
+
 function shell(title,desc,body,action=''){document.getElementById('content').innerHTML=`<div class="page-head"><div><h3>${title}</h3><p>${desc}</p></div>${action}</div>${body}`}
 function sel(name,items,placeholder='Select...'){return `<select id="${name}"><option value="">${placeholder}</option>${items.map(x=>`<option value="${esc(x.id)}">${esc(x.label)}</option>`).join('')}</select>`}
 function parts(){return CACHE.parts.map(x=>({id:x.PartID,label:`${x.PartNumber} — ${x.PartName||''}`}));}function whs(){return CACHE.warehouses.map(x=>({id:x.WarehouseID,label:`${x.WarehouseCode} — ${x.WarehouseName}`}));}function custs(){return CACHE.customers.map(x=>({id:x.CustomerID,label:`${x.CustomerCode} — ${x.CustomerName}`}));}
