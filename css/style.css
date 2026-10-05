@@ -522,38 +522,54 @@ a{color:var(--blue);text-decoration:none}
   font-size:12px;
   flex-shrink:0;
 }
+
+/* --- API State Badge --- */
 .api-state{
   display:inline-flex;
   align-items:center;
   gap:6px;
   font-size:11px;
-  font-weight:600;
+  font-weight:700;
   color:var(--muted);
   padding:6px 12px;
   border-radius:99px;
   background:#f1f5f9;
   transition:all .2s;
+  letter-spacing:.2px;
+}
+.api-state::before{
+  content:'';
+  width:6px;height:6px;
+  border-radius:50%;
+  background:currentColor;
+  opacity:.6;
+  flex-shrink:0;
 }
 .api-state.good{
   color:var(--green);
   background:var(--green-soft);
 }
 .api-state.good::before{
-  content:'';
-  width:6px;height:6px;border-radius:50%;
   background:var(--green);
   box-shadow:0 0 0 0 rgba(5,150,105,.6);
   animation:pulse 2s infinite;
+  opacity:1;
 }
 .api-state.bad{
   color:var(--red);
   background:var(--red-soft);
+}
+.api-state.bad::before{
+  background:var(--red);
+  opacity:1;
 }
 @keyframes pulse{
   0%{box-shadow:0 0 0 0 rgba(5,150,105,.6)}
   70%{box-shadow:0 0 0 6px rgba(5,150,105,0)}
   100%{box-shadow:0 0 0 0 rgba(5,150,105,0)}
 }
+
+/* --- Refresh Button --- */
 .refresh{
   width:34px;height:34px;
   border-radius:var(--r-sm);
@@ -562,14 +578,29 @@ a{color:var(--blue);text-decoration:none}
   color:var(--text2);
   font-size:15px;
   display:grid;place-items:center;
-  transition:all .15s;
+  transition:border-color .15s,color .15s,background .15s;
+  cursor:pointer;
 }
 .refresh:hover{
   border-color:var(--blue);
   color:var(--blue);
   background:var(--blue-soft);
-  transform:rotate(90deg);
 }
+.refresh svg{display:block;pointer-events:none}
+.refresh.spinning svg{
+  animation:refreshSpin .8s linear infinite;
+}
+.refresh.spinning{
+  color:var(--blue);
+  border-color:var(--blue);
+  background:var(--blue-soft);
+  cursor:wait;
+}
+@keyframes refreshSpin{
+  from{transform:rotate(0deg)}
+  to{transform:rotate(360deg)}
+}
+
 .top-right b{
   color:var(--text);
   font-weight:600;
@@ -1562,7 +1593,6 @@ tbody tr:nth-child(even):hover{background:#f5f8fc}
   .scan-actions{flex-direction:column}
   .scan-actions .btn{width:100%}
 
-  /* Login header compact */
   .login-header{gap:14px}
   .brand-logo-wrap{padding:9px 12px}
   .brand-logo-byd{width:56px}
