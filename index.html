@@ -1,7 +1,7 @@
 <!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WMS System</title><link rel="stylesheet" href="css/style.css"><script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script></head><body>
 <div id="loginPage" class="login-page"><div class="login-card"><div class="login-header"><div class="brand-logo-wrap"><img src="assets/logo-byd.svg" alt="BYD" class="brand-logo-byd"></div><div class="login-header-text"><h1>System Login</h1><p>Warehouse &amp; inventory control</p></div></div><form id="loginForm"><label>Username</label><input id="username" required><label>Password</label><input id="password" type="password" required><button>Sign In</button><div id="loginMessage" class="message"></div></form></div></div>
 <div id="appPage" class="app hidden"><aside class="sidebar"><div class="sidebar-head"><div class="logo"><img src="assets/logo-byd.svg" alt="BYD" class="logo-byd"></div><div><b>WMS SYSTEM</b><small>Warehouse Control</small></div></div><nav id="nav"></nav><button id="logoutBtn" class="logout">↪ Logout</button></aside>
-<main class="main"><header class="topbar"><div class="title-wrap"><button id="mobileMenu" class="mobile">☰</button><div><h2 id="pageTitle">Dashboard</h2><span id="pageSub">Inventory Control & Warehouse Overview</span></div></div><div class="top-right"><span id="apiState" class="api-state">●</span><button id="refreshBtn" class="refresh">↻</button><b id="userInfo">-</b></div></header><section id="content" class="content"></section></main></div>
+<main class="main"><header class="topbar"><div class="title-wrap"><button id="mobileMenu" class="mobile">☰</button><div><h2 id="pageTitle">Dashboard</h2><span id="pageSub">Inventory Control & Warehouse Overview</span></div></div><div class="top-right"><span id="apiState" class="api-state">Checking</span><button id="refreshBtn" class="refresh" title="Refresh data"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button><b id="userInfo">-</b></div></header><section id="content" class="content"></section></main></div>
 <div id="toast" class="toast"></div>
 <script src="js/config.js"></script><script src="js/api.js"></script><script src="js/auth.js"></script>
 <script>
@@ -31,6 +31,15 @@ function esc(x){return String(x??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&l
 function toast(msg,ok=true){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(ok?'ok':'err')+' show';setTimeout(()=>t.className='toast',3000)}
 function user(){try{return JSON.parse(sessionStorage.getItem('wmsUser')||'{}')}catch{return {}}}
 
+/* ========== API STATE HELPER ========== */
+function setApiState(state){
+  const el=document.getElementById('apiState');
+  if(!el) return;
+  if(state==='good'){el.textContent='Cloud On';el.className='api-state good';}
+  else if(state==='bad'){el.textContent='Cloud Off';el.className='api-state bad';}
+  else {el.textContent='Checking';el.className='api-state';}
+}
+
 /* ========== BUILD NAV (DROPDOWN) ========== */
 function buildNav(){
   const nav=document.getElementById('nav');
@@ -38,7 +47,6 @@ function buildNav(){
   nav.innerHTML=NAV.map(([label,icon,items])=>{
     const hasActive=items.some(x=>x[0]===currentPage);
 
-    // Single item → render sebagai direct button (tanpa chevron)
     if(items.length===1){
       const x=items[0];
       return `<button class="nav-item solo ${x[0]===currentPage?'active':''}" data-page="${x[0]}">
@@ -47,7 +55,6 @@ function buildNav(){
       </button>`;
     }
 
-    // Multi item → render sebagai dropdown
     return `<div class="nav-group ${hasActive?'open':''}">
       <button class="nav-group-head" type="button" onclick="toggleNavGroup(this)">
         <span class="nav-group-icon">${NAV_ICONS[icon]||''}</span>
@@ -69,9 +76,15 @@ function toggleNavGroup(btn){
   if(group) group.classList.toggle('open');
 }
 
-async function loadCache(){const jobs=[['parts','parts'],['warehouses','warehouses'],['customers','customers'],['stock','stock']];const results=await Promise.all(jobs.map(async([k,a])=>{try{return [k,await apiGet(a)]}catch(e){return [k,{success:false,error:e}]}}));results.forEach(([k,r])=>{if(r.success)CACHE[k]=r.data||[]});}
+async function loadCache(){
+  const jobs=[['parts','parts'],['warehouses','warehouses'],['customers','customers'],['stock','stock']];
+  const results=await Promise.all(jobs.map(async([k,a])=>{try{return [k,await apiGet(a)]}catch(e){return [k,{success:false,error:e}]}}));
+  let anyOk=false;
+  results.forEach(([k,r])=>{if(r.success){CACHE[k]=r.data||[];anyOk=true;}});
+  setApiState(anyOk?'good':'bad');
+}
 
-/* ========== GO PAGE (auto-open parent group) ========== */
+/* ========== GO PAGE ========== */
 function go(page){
   const m=META[page]||META.dashboard;
   document.getElementById('pageTitle').textContent=m[0];
@@ -93,7 +106,7 @@ function sel(name,items,placeholder='Select...'){return `<select id="${name}"><o
 function parts(){return CACHE.parts.map(x=>({id:x.PartID,label:`${x.PartNumber} — ${x.PartName||''}`}));}function whs(){return CACHE.warehouses.map(x=>({id:x.WarehouseID,label:`${x.WarehouseCode} — ${x.WarehouseName}`}));}function custs(){return CACHE.customers.map(x=>({id:x.CustomerID,label:`${x.CustomerCode} — ${x.CustomerName}`}));}
 function formCard(fields,submitText='Save'){return `<div class="form-card"><div class="form-grid">${fields.join('')}</div><div class="form-actions"><button class="btn ghost" onclick="go(document.querySelector('.nav-item.active')?.dataset.page||'dashboard')">Cancel</button><button class="btn primary" id="saveBtn">${submitText}</button></div></div>`}
 function f(label,id,type='text',extra=''){return `<label class="field"><span>${label}</span><input id="${id}" type="${type}" ${extra}></label>`}function fs(label,id,html){return `<label class="field"><span>${label}</span>${html}</label>`}
-async function dashboard(){shell('Dashboard','Inventory Control & Warehouse Overview',`<div class="dash-tools"><div><small>LIVE WMS MONITORING</small><h3>Inventory Control</h3></div><div class="filter-chip">All Warehouse · Today</div></div><div class="kpis">${['Total Stock','Stock Lines','Total Transactions',"Today's Transactions",'Active Parts'].map((x,i)=>`<div class="kpi k${i}"><span>${x}</span><b id="k${i}">-</b><small>Live from WMS</small></div>`).join('')}</div><div class="grid3"><div class="panel span2"><h4>Stock by Warehouse</h4><div id="whChart"></div></div><div class="panel"><h4>Top 5 Stock</h4><div id="topStock"></div></div><div class="panel"><h4>Stock by Category</h4><div id="catChart"></div></div><div class="panel span2"><h4>Recent Transactions</h4><div id="recent"></div></div><div class="panel"><h4>System Status</h4><div class="system-ok">● API Connected</div><small id="statusDetail">Loading...</small></div></div>`);try{const [d,t]=await Promise.all([apiGet('dashboard'),apiGet('transactions',{limit:8})]);if(!d.success)throw Error(d.message);const x=d.data;['totalStock','balanceLines','totalTransactions','todayTransactions'].forEach((k,i)=>document.getElementById('k'+i).textContent=fmt(x[k]));document.getElementById('k4').textContent=fmt(CACHE.parts.length);const wm={};CACHE.warehouses.forEach(w=>wm[w.WarehouseID]=w);const sums={};CACHE.stock.forEach(s=>sums[s.WarehouseID]=(sums[s.WarehouseID]||0)+Number(s.QtyOnHand||0));const max=Math.max(1,...Object.values(sums));document.getElementById('whChart').innerHTML=Object.entries(sums).sort((a,b)=>b[1]-a[1]).map(([id,q])=>`<div class="bar"><span>${esc(wm[id]?.WarehouseCode||id)}</span><div><i style="width:${q/max*100}%"></i></div><b>${fmt(q)}</b></div>`).join('')||'<div class="empty">No data</div>';const pm={};CACHE.parts.forEach(p=>pm[p.PartID]=p);const ps={};CACHE.stock.forEach(s=>ps[s.PartID]=(ps[s.PartID]||0)+Number(s.QtyOnHand||0));document.getElementById('topStock').innerHTML=Object.entries(ps).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([id,q],i)=>`<div class="rank"><em>${i+1}</em><span><b>${esc(pm[id]?.PartNumber||id)}</b><small>${esc(pm[id]?.PartName||'')}</small></span><strong>${fmt(q)}</strong></div>`).join('')||'<div class="empty">No data</div>';const cats={};Object.entries(ps).forEach(([id,q])=>{const c=pm[id]?.Category||'Other';cats[c]=(cats[c]||0)+q});const ct=Object.values(cats).reduce((a,b)=>a+b,0)||1;document.getElementById('catChart').innerHTML=Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([c,q])=>`<div class="cat"><span>${esc(c)}</span><b>${Math.round(q/ct*100)}%</b><div><i style="width:${q/ct*100}%"></i></div></div>`).join('')||'<div class="empty">No data</div>';document.getElementById('recent').innerHTML=(t.data||[]).map(z=>`<div class="tx"><span><b>${esc(z.TransactionType)}</b><small>${esc(pm[z.PartID]?.PartNumber||z.PartID||'-')} · ${esc(z.BatchNo||'-')}</small></span><strong>${fmt(z.Qty)}</strong><small>${esc(z.CreatedBy||'-')}</small></div>`).join('')||'<div class="empty">No data</div>';document.getElementById('statusDetail').textContent=`${CACHE.stock.length} balance lines · ${t.data?.length||0} recent transactions loaded`;document.getElementById('apiState').textContent='● API Connected';document.getElementById('apiState').className='api-state good'}catch(e){document.getElementById('statusDetail').textContent=e.message;document.getElementById('apiState').textContent='● API Error';document.getElementById('apiState').className='api-state bad'}}
+async function dashboard(){shell('Dashboard','Inventory Control & Warehouse Overview',`<div class="dash-tools"><div><small>LIVE WMS MONITORING</small><h3>Inventory Control</h3></div><div class="filter-chip">All Warehouse · Today</div></div><div class="kpis">${['Total Stock','Stock Lines','Total Transactions',"Today's Transactions",'Active Parts'].map((x,i)=>`<div class="kpi k${i}"><span>${x}</span><b id="k${i}">-</b><small>Live from WMS</small></div>`).join('')}</div><div class="grid3"><div class="panel span2"><h4>Stock by Warehouse</h4><div id="whChart"></div></div><div class="panel"><h4>Top 5 Stock</h4><div id="topStock"></div></div><div class="panel"><h4>Stock by Category</h4><div id="catChart"></div></div><div class="panel span2"><h4>Recent Transactions</h4><div id="recent"></div></div><div class="panel"><h4>System Status</h4><div class="system-ok">● API Connected</div><small id="statusDetail">Loading...</small></div></div>`);try{const [d,t]=await Promise.all([apiGet('dashboard'),apiGet('transactions',{limit:8})]);if(!d.success)throw Error(d.message);const x=d.data;['totalStock','balanceLines','totalTransactions','todayTransactions'].forEach((k,i)=>document.getElementById('k'+i).textContent=fmt(x[k]));document.getElementById('k4').textContent=fmt(CACHE.parts.length);const wm={};CACHE.warehouses.forEach(w=>wm[w.WarehouseID]=w);const sums={};CACHE.stock.forEach(s=>sums[s.WarehouseID]=(sums[s.WarehouseID]||0)+Number(s.QtyOnHand||0));const max=Math.max(1,...Object.values(sums));document.getElementById('whChart').innerHTML=Object.entries(sums).sort((a,b)=>b[1]-a[1]).map(([id,q])=>`<div class="bar"><span>${esc(wm[id]?.WarehouseCode||id)}</span><div><i style="width:${q/max*100}%"></i></div><b>${fmt(q)}</b></div>`).join('')||'<div class="empty">No data</div>';const pm={};CACHE.parts.forEach(p=>pm[p.PartID]=p);const ps={};CACHE.stock.forEach(s=>ps[s.PartID]=(ps[s.PartID]||0)+Number(s.QtyOnHand||0));document.getElementById('topStock').innerHTML=Object.entries(ps).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([id,q],i)=>`<div class="rank"><em>${i+1}</em><span><b>${esc(pm[id]?.PartNumber||id)}</b><small>${esc(pm[id]?.PartName||'')}</small></span><strong>${fmt(q)}</strong></div>`).join('')||'<div class="empty">No data</div>';const cats={};Object.entries(ps).forEach(([id,q])=>{const c=pm[id]?.Category||'Other';cats[c]=(cats[c]||0)+q});const ct=Object.values(cats).reduce((a,b)=>a+b,0)||1;document.getElementById('catChart').innerHTML=Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([c,q])=>`<div class="cat"><span>${esc(c)}</span><b>${Math.round(q/ct*100)}%</b><div><i style="width:${q/ct*100}%"></i></div></div>`).join('')||'<div class="empty">No data</div>';document.getElementById('recent').innerHTML=(t.data||[]).map(z=>`<div class="tx"><span><b>${esc(z.TransactionType)}</b><small>${esc(pm[z.PartID]?.PartNumber||z.PartID||'-')} · ${esc(z.BatchNo||'-')}</small></span><strong>${fmt(z.Qty)}</strong><small>${esc(z.CreatedBy||'-')}</small></div>`).join('')||'<div class="empty">No data</div>';document.getElementById('statusDetail').textContent=`${CACHE.stock.length} balance lines · ${t.data?.length||0} recent transactions loaded`;setApiState('good')}catch(e){document.getElementById('statusDetail').textContent=e.message;setApiState('bad')}}
 function stockPage(){
   const pm=Object.fromEntries(CACHE.parts.map(x=>[x.PartID,x]));
   const wm=Object.fromEntries(CACHE.warehouses.map(x=>[x.WarehouseID,x]));
@@ -234,7 +247,6 @@ function parseWmsQR(raw){
   if(!text) throw new Error('Data scan kosong.');
   const result={raw:text,partNumber:'',partName:'',uom:'',qty:null,batchNo:'',lot:'',po:'',date:'',dn:'',serial:'',serialNumber:'',vendor:'',plant:'',expiryDate:'',qRaw:'',fields:{}};
 
-  // Format WMS internal: P001|100|BATCH001
   const pipe=text.split('|').map(x=>x.trim());
   if(pipe.length>=1 && pipe[0] && !text.includes(';') && !text.includes(':')){
     result.partNumber=pipe[0]||'';
@@ -242,7 +254,6 @@ function parseWmsQR(raw){
     result.batchNo=pipe[2]||'';
   }
 
-  // Supplier / structured QR: M:P001/PCS;Q:100;B:BATCH001;...
   text.split(';').map(x=>x.trim()).filter(Boolean).forEach(token=>{
     const i=token.indexOf(':');
     if(i<0) return;
@@ -258,10 +269,6 @@ function parseWmsQR(raw){
   }
   const q=result.fields.Q||'';
   result.qRaw=q;
-  // WMS standard: Qty = angka pertama pada field Q.
-  // Contoh: Q:24/3/47 -> Qty 24
-  // Contoh: Q:48      -> Qty 48
-  // Nilai Q lengkap tetap disimpan pada qRaw untuk traceability.
   if(q){
     const firstQty=String(q).trim().split('/')[0].trim();
     if(firstQty && /^[-+]?\d+(?:\.\d+)?$/.test(firstQty)){
@@ -474,6 +481,22 @@ async function submit(action,data,label){
 function v(id){return document.getElementById(id)?.value?.trim()||''}
 async function refreshStockOnly(){try{const r=await apiGet('stock');if(r.success)CACHE.stock=r.data||[]}catch(e){}}
 async function refreshAll(){await loadCache();go(document.querySelector('.nav-item.active')?.dataset.page||'dashboard')}
-document.getElementById('logoutBtn').onclick=logoutUser;document.getElementById('refreshBtn').onclick=refreshAll;document.getElementById('mobileMenu').onclick=()=>document.getElementById('nav').classList.toggle('open');
+
+/* ========== INIT EVENT HANDLERS ========== */
+document.getElementById('logoutBtn').onclick=logoutUser;
+document.getElementById('refreshBtn').onclick=async function(){
+  const btn=this;
+  if(btn.classList.contains('spinning')) return;
+  btn.classList.add('spinning');
+  setApiState('checking');
+  try{
+    await refreshAll();
+  }finally{
+    // minimal 500ms biar animasi spinner keliatan smooth walau response cepat
+    setTimeout(()=>btn.classList.remove('spinning'),500);
+  }
+};
+document.getElementById('mobileMenu').onclick=()=>document.getElementById('nav').classList.toggle('open');
+
 (async()=>{buildNav();await loadCache();go('dashboard')})();
 </script></body></html>
